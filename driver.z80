@@ -1,0 +1,494 @@
+;//////////////////////////////////////////////////////////////////////////////////////////////////////
+;////
+;////	SHAKUHACHI SOUND SYSTEM DRIVER
+;////
+;//////////////////////////////////////////////////////////////////////////////////////////////////////	
+;
+;
+;(C)2021 RetroAND
+;
+;
+;Version: Alpha/b
+;
+;
+;License:
+;	- Free to distribute
+;	- Free to alter or modify the content
+;	- Copies and derivatives must bear this license
+;	- Commercial use of this software not allowed without explicit consent
+;	- Must credit the autor
+;	- For any other term not specified, ask the author
+;
+;
+;//////////////////////////////////////////////////////////////////////////////////////////////////////
+;////
+;////	MAIN PROGRAM
+;////
+;//////////////////////////////////////////////////////////////////////////////////////////////////////	
+
+
+.ent 0x8000
+;  //Hack to make this code work in the emulator
+.org 0x0038
+        ret;
+
+
+
+.org 0x8000
+start:
+		di;				//disable interrupts;
+		
+		push af;		//save registers
+		push bc
+		push de
+		push hl
+		push ix
+		
+		ld a,0xfe;		//load higher part of the isr address into the cpu
+		ld i, a
+		
+		ld hl, 0xfe00;	//generate the vector table
+		ld a, 0xc8
+vector_loop:
+		ld (hl),a
+		inc l
+		jr nz,vector_loop
+		inc h
+		ld (hl),a
+	
+		im 2;			//set interrupt mode 2
+
+		call sound_reset;		//reset sound system
+		
+		pop ix;			//restore registers
+		pop hl
+		pop de
+		pop bc
+		pop af	
+		
+		ei;				//enable interrupts;
+	
+infinite:
+		jp infinite;	//make an infinite loop to ensure the program never ends
+		
+		
+;UPDATE CHANNELS ROUTINE
+sound_update:
+		ld a, (channel_status)
+test_0:
+		bit 0, a
+		jr z,test_1
+		ex af,af'
+		ld hl, channel_0_data
+		ld a, (hl)
+		ld b, 0
+		call check_timer
+		jp nz, test_1
+		call process_instruction
+		ex af,af'
+test_1:
+		bit 1, a
+		jr z,test_2
+		ex af,af'
+		ld hl, channel_1_data
+		ld a, (hl)
+		ld b, 1	
+		call check_timer
+		jp nz, test_2
+		call process_instruction
+		ex af,af'
+test_2:
+		bit 2, a
+		jr z,test_3
+		ex af,af'
+		ld hl, channel_2_data
+		ld a, (hl)
+		ld b, 2
+		call check_timer
+		jp nz, test_3
+		call process_instruction
+		ex af,af'		
+test_3:
+		bit 3, a
+		jr z,test_4
+		ex af,af'
+		ld hl, channel_3_data
+		ld a, (hl)
+		ld b, 3
+		call check_timer
+		jp nz, test_4
+		call process_instruction
+		ex af,af'		
+test_4:
+		bit 4, a
+		jr z,test_5
+		ex af,af'
+		ld hl, channel_4_data
+		ld a, (hl)
+		ld b, 4
+		call check_timer
+		jp nz, test_5
+		call process_instruction
+		ex af,af'
+test_5:
+		bit 5, a
+		ret z
+		ex af,af'
+		ld hl, channel_5_data
+		ld a, (hl)
+		ld b, 5
+		call check_timer
+		ret nz
+		call process_instruction
+		ex af,af'
+		
+		ret
+		
+check_timer:
+        push hl
+        push bc
+        xor a
+        ld hl, channel_timing
+        ld c, 0
+        add hl, bc
+        ld d, (hl)
+        cp d
+        ret nz
+        inc hl
+        ld e, (hl)
+        cp e
+        pop bc
+        pop hl
+        ret
+
+
+; A -> OPCODE (not used in subsequent calls)
+; B -> CHANNEL (used in subsequent calls)
+; C -> STATUS (used un subsequent calls)
+; HL -> CHANNEL MEMORY (used in subsequent calls)
+process_instruction:
+		ld d, (hl)
+		ld a, 0xff
+		cp d
+		jp z, commit
+		xor a
+		cp d
+		jp z, channel_end
+		inc a
+		cp d
+		jp z, status_set
+		inc a
+		cp d
+		jp z, channel_frequency
+		inc a
+		cp d
+		jp z, channel_volume
+		inc a
+		cp d
+		jp z, channel_repeat_counter
+		inc a
+		cp d
+		jp z, channel_repeat
+		inc a
+		cp d
+		jp z, channel_loop
+		ret
+
+;//////////////////////////////////////////////////////////////////////////////////////////////////////
+;////
+;////	VARIABLE AREA
+;////
+;//////////////////////////////////////////////////////////////////////////////////////////////////////		
+	
+channel_status:					db;				Channels update flags
+channel_instruction_address:	ds(12);			Every instruction address for each of the channels
+channel_timing:					ds(12);			Every timing (in frames) to trigger an update on a channel
+
+;//////////////////////////////////////////////////////////////////////////////////////////////////////
+;////
+;////	SOUND SYSTEM COMMANDS
+;////
+;//////////////////////////////////////////////////////////////////////////////////////////////////////	
+
+
+;RESET SOUND SYSTEM COMMAND
+sound_reset:
+
+;		CONFIGURE PITs
+
+
+		;disable all channels
+		;configure PITs channel_0
+		;configure PITs channel_1
+		;configure PITs channel_2
+		
+		
+		
+;		INITIALIZE CHANNEL STATUS
+		
+		xor a;
+		ld hl, channel_status
+		ld (hl),a
+				
+;		INITIALIZE PROGRAM POINTERS		
+		
+		ld de, channel_0_data;		//set program pointer for channel_0
+		ld hl, channel_instruction_address
+		ld (hl), d	
+		inc hl
+		ld(hl), e
+		
+		ld de, channel_1_data;		//set program pointer for channel_1
+		inc hl
+		ld (hl), d	
+		inc hl
+		ld(hl), e
+		
+		ld de, channel_2_data;		//set program pointer for channel_2
+		inc hl
+		ld (hl), d	
+		inc hl
+		ld(hl), e
+		
+		ld de, channel_3_data;		//set program pointer for channel_3
+		inc hl
+		ld (hl), d	
+		inc hl
+		ld(hl), e
+		
+		ld de, channel_4_data;		//set program pointer for channel_4
+		inc hl
+		ld (hl), d	
+		inc hl
+		ld(hl), e
+		
+		ld de, channel_5_data;		//set program pointer for channel_5
+		inc hl
+		ld (hl), d	
+		inc hl
+		ld(hl), e
+
+		
+;	INITIALIZE TIMING VARIABLES
+		
+		ld hl, channel_timing
+		ld a, 5
+		
+timing_init_loop:
+		ld (hl),0
+		dec a
+		jr nz,timing_init_loop
+	
+		ret
+
+;SET STATUS COMMAND
+status_set:
+        inc hl
+        ld d,(hl)
+        ;some out
+        inc hl
+        jp process_instruction
+
+; SET CHANNEL FREQUENCY	COMMAND
+channel_frequency:
+        inc hl
+        ld d, (hl)
+        inc hl
+        ld c, (hl)
+		jp process_instruction;
+
+;SET CHANNEL TIME COMMAND
+channel_time:
+        inc hl
+        ld d, (hl)
+        inc hl
+        ld e, (hl)
+        inc hl
+        push hl
+        push bc
+        ld hl, channel_timing
+        ld c, 0
+        add hl, bc
+        ld (hl), d
+        inc hl
+        ld(hl), e
+        pop bc
+        pop hl
+		jp process_instruction;
+
+;SET CHANNEL VOLUME COMMAND	
+channel_volume:
+        ;to be implemented
+		jp process_instruction;
+
+;SET CHANNEL REPEAT COUNTER COMMAND
+channel_repeat_counter:
+        push bc
+        inc hl
+        ld d, (hl)
+        inc hl
+        ld e, (hl)
+        inc hl
+        ld c, (hl)
+        push hl
+        push de
+        push hl
+        push de
+        ld (hl), c
+        ld hl, de
+        pop bc
+		jp process_instruction
+		
+;SET CHANNEL REPEAT OVER COUNTER COMMAND
+channel_repeat:
+        push bc
+        inc hl
+        ld d, (hl)
+        inc hl
+        ld e, (hl)
+        inc hl
+        xor a
+        push hl         ;exchange register pairs
+        push de
+        push hl
+        push de
+        ld b, (hl)
+        cp b
+        pop bc
+        ld hl, de
+        jp nz, process_instruction
+
+;SET CHANNEL LOOP FOREVER
+channel_loop:
+		inc hl
+        ld d, (hl)
+        inc hl
+        ld e, (hl)
+        ld hl, de
+        jp process_instruction
+        
+        
+
+; STOP CHANNEL COMMAND
+channel_end:
+		ld d, a
+res_0:
+		xor a
+		cp b
+		jr nz,res_1
+		res 0, c
+		jr z,commit
+res_1:		
+		inc a
+		cp b
+		jr nz,res_2
+		res 1, c
+		jr z,commit
+res_2:
+		inc a
+		cp b
+		jr nz,res_3
+		res 2, c
+		jr z,commit
+res_3:
+		inc a
+		cp b
+		jr nz,res_4
+		res 3, c
+		jr z,commit
+res_4:
+		inc a
+		cp b
+		jr nz,res_5
+		res 4, c
+		jr z,commit
+res_5:
+		inc a	
+		cp b
+		jr nz,commit
+		res 5, c
+
+        
+		
+;COMMIT COMMAND
+commit:
+        inc hl;                             //Save channel status and output it
+        ld de, hl
+        
+        ld hl, channel_status
+        ;someout
+        ld (hl), c
+        
+        ld c, 0;                             //Save channel instruction address
+        ld hl, channel_instruction_address
+        add hl, bc
+        ld (hl), d
+        inc hl
+        ld (hl), e
+        
+        ld hl, channel_timing;              //Update and save timer for next execution
+        add hl, bc
+        ld d, (hl)
+        inc hl
+        ld e, (hl)
+        dec de
+        ld (hl), e
+        dec hl
+        ld (hl), d
+
+        ret;
+
+;//////////////////////////////////////////////////////////////////////////////////////////////////////
+;////
+;////	TRACK BULK DATA
+;////
+;//////////////////////////////////////////////////////////////////////////////////////////////////////	
+
+
+channel_0_data:	ds(512);		//program for channel 0
+channel_1_data:	ds(512);		//program for channel 1
+channel_2_data: ds(512);		//program for channel 2
+channel_3_data:	ds(512);		//program for channel 3
+channel_4_data: ds(512);		//program for channel 4
+channel_5_data: ds(512);		//program for channel 5
+	
+	
+;//////////////////////////////////////////////////////////////////////////////////////////////////////
+;////
+;////	INTERRUPT SERVICE ROUTINE
+;////
+;//////////////////////////////////////////////////////////////////////////////////////////////////////
+
+	
+.org 0xc8c8		
+isr:
+		di;				//disable interrupts just for in case we are too slow
+		
+		push af;		//save registers
+		push bc
+		push de
+		push hl
+		push ix
+
+		call sound_update;	//update sound system
+		rst 0x38;		//execute spectrum native ISR
+
+		pop ix;			//restore registers
+		pop hl
+		pop de
+		pop bc
+		pop af	
+		
+		ei;				//enable interrupts;
+		
+		reti;			//return to main flow
+		
+.org 0xFE00
+interrupt_vector: ds(257)
+
+		
+;//////////////////////////////////////////////////////////////////////////////////////////////////////
+;////
+;////	END OF FILE
+;////
+;//////////////////////////////////////////////////////////////////////////////////////////////////////
